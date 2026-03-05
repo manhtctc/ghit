@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hệ thống Theo dõi Vị trí GPS</title>
+    <link rel="stylesheet" href="main.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+  </head>
+  <body>
+    <header>
+      <h1>Hệ thống Theo dõi Vị trí GPS</h1>
+      <p>Theo dõi vị trí & cảnh báo thời tiết xấu cho gia đình - Manh 2026</p>
+    </header>
+    <main>
+      <section id="location-section">
+        <h2>Vị trí hiện tại của bạn</h2>
+        <button id="get-location">Lấy vị trí hiện tại</button>
+        <p id="location-info">Vĩ độ: Chưa có, Kinh độ: Chưa có</p>
+        <div id="map" style="height: 400px"></div>
+      </section>
+
+      <section id="family-section">
+        <h2>Vị trí của gia đình & bạn bè (real-time)</h2>
+        <p id="family-location">Chưa có vị trí nào</p>
+        <div id="family-map" style="height: 300px"></div>
+      </section>
+
+      <section id="status-section">
+        <h2>Cập nhật trạng thái</h2>
+        <select id="status-select">
+          <option value="safe">🟢 An toàn</option>
+          <option value="warning">🟡 Cần theo dõi</option>
+          <option value="danger">🔴 Nguy hiểm</option>
+        </select>
+        <button id="update-status">Cập nhật trạng thái</button>
+        <p id="current-status">Trạng thái hiện tại: 🟢 An toàn</p>
+      </section>
+
+      <section id="emergency-section">
+        <h2>Cảnh báo khẩn cấp & Phân tích thời tiết</h2>
+        <button id="emergency-btn">🚨 KHẨN CẤP</button>
+        <p id="weather-info">Thời tiết: Đang kiểm tra...</p>
+        <p
+          id="ai-analysis"
+          style="
+            color: #d81b60;
+            font-weight: bold;
+            white-space: pre-wrap;
+            min-height: 120px;
+            border: 1px dashed #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            background: #f9f9f9;
+          "
+        ></p>
+        <p id="alert-info" style="color: #d32f2f; font-weight: bold"></p>
+      </section>
+
+      <section id="share-section">
+        <h2>Chia sẻ vị trí thời gian thực & Kết bạn</h2>
+        <p id="my-uid">UID của bạn: Đang tải...</p>
+        <button id="start-sharing">Bắt đầu chia sẻ vị trí</button>
+        <button id="stop-sharing">Dừng chia sẻ</button>
+        <p id="sharing-status">Trạng thái chia sẻ: Tắt</p>
+
+        <!-- Phần kết bạn theo UID -->
+        <div
+          id="friends-section"
+          style="
+            margin-top: 25px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+          "
+        >
+          <h3>Kết bạn & Theo dõi bạn bè</h3>
+          <p>UID của bạn bè (họ copy từ trang của họ):</p>
+          <input
+            type="text"
+            id="friend-uid"
+            placeholder="Dán UID bạn bè vào đây"
+            style="padding: 10px; width: 300px"
+          />
+          <button id="add-friend">Thêm bạn bè</button>
+          <ul
+            id="friend-list"
+            style="list-style: none; padding: 0; margin-top: 15px"
+          ></ul>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <p>© 2026 Hệ thống Theo dõi GPS - Manh</p>
+    </footer>
+
+    <!-- Firebase SDK (Auth + Database) - IMPORT ĐÚNG -->
+    <!-- Firebase SDK (Auth + Database) - IMPORT ĐÚNG -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+      import {
+        getAuth,
+        signInAnonymously,
+        onAuthStateChanged,
+      } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+      import {
+        getDatabase,
+        ref,
+        set,
+        onValue,
+      } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyDJWA-JSgO9k5C_FH6PnGjSiKZiFIleCPM",
+        authDomain: "weather-app-62b59.firebaseapp.com",
+        databaseURL:
+          "https://weather-app-62b59-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "weather-app-62b59",
+        storageBucket: "weather-app-62b59.firebasestorage.app",
+        messagingSenderId: "414119007011",
+        appId: "1:414119007011:web:36de87aa4b42d73570b296",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      window.db = getDatabase(app);
+      window.auth = getAuth(app);
+
+      // Đăng nhập ẩn danh tự động
+      signInAnonymously(window.auth)
+        .then(() => console.log("Đăng nhập ẩn danh thành công"))
+        .catch((error) => console.error("Lỗi đăng nhập ẩn danh:", error));
+      // Lấy UID và hiển thị
+      onAuthStateChanged(window.auth, (user) => {
+        if (user) {
+          window.userId = user.uid;
+          document.getElementById("my-uid").textContent =
+            `UID của bạn: ${user.uid}`;
+          console.log("UID hiện tại:", user.uid);
+        } else {
+          document.getElementById("my-uid").textContent =
+            "UID của bạn: Đang tải...";
+        }
+      });
+    </script>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>
